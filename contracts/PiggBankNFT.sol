@@ -4,88 +4,92 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
-import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "./PiggyToken.sol";
 
 contract PiggyBankNFT is ERC1155, Ownable, ERC1155Burnable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
+
     struct PiggyBankTier {
-        string name;
         uint lockingPeriod;
         uint bonusPercentage;
     }
 
-    //mapping(uint => PiggyBankTier) public tiers;
-    mapping(uint => uint) private tokenTier;
-    mapping(address => mapping(uint => uint)) public balances;
+    struct Deposit {
+        uint amount;
+        uint tierId;
+        uint timestamp;
+    }
+    PiggyToken public token;
+    PiggyBankTier[] _tiers;
+
+    mapping(uint => PiggyBankTier) public tiers;
+    mapping(address => Deposit) public deposits;
+    mapping(uint => uint) public tokenIdTotierId;
     mapping(address => mapping(uint => bool)) public isActive;
 
-    event PiggyBankNFTCreated(address owner, uint tokenId, string tierName);
+    constructor(address _token) ERC1155("") {
+        token = PiggyToken(_token);
+    }
 
-    PiggyBankTier[] public tiers;
+    function setTiers(
+        uint _tierId,
+        uint _lockingPeriod,
+        uint _bonusPercentage
+    ) external onlyOwner {
+        require(_lockingPeriod > 0, "Locking period must be greater than 0");
+        require(tiers[_tierId].lockingPeriod == 0, "Tier id already exists");
+        tiers[_tierId] = PiggyBankTier(_lockingPeriod, _bonusPercentage);
+    }
 
-    constructor() ERC1155("") {}
-
-    function createPiggyBankNFT(
-        uint _tier,
+    function mintPiggyBankNFT(
+        uint _tierId,
         uint _quantity,
         bytes memory _data
     ) external {
-        PiggyBankTier storage tier = tiers[_tier];
+        require(tiers[_tierId].lockingPeriod > 0, "Invalid tier");
         _tokenIds.increment();
         uint newTokenId = _tokenIds.current();
         uint quantity = _quantity;
         bytes memory data = _data;
         _mint(msg.sender, newTokenId, quantity, data);
-        tokenTier[newTokenId] = _tier;
+        tokenIdTotierId[newTokenId] = _tierId;
         isActive[msg.sender][newTokenId] = true;
 
-        emit PiggyBankNFTCreated(msg.sender, newTokenId, tier.name);
+        // emit PiggyBankNFTCreated(msg.sender, newTokenId, _tierId);
     }
 
-    function setTiers(
-        uint _tier,
-        string memory _name,
-        uint _lockingPeriod,
-        uint _bonusPercentage
-    ) external onlyOwner {
-        tiers[_tier] = PiggyBankTier({
-            name: _name,
-            lockingPeriod: _lockingPeriod,
-            bonusPercentage: _bonusPercentage
-        });
-    }
+    function deposit(uint _amount, uint _tierId) external {
+        require(_amount > 0, "Amount must be greater than 0");
+        require(tiers[_tierId].lockingPeriod > 0, "Invalid tier");
+        require(
+            token.transferFrom(winneraddress[], address(this), _amount),
+            "Transfer failed"
+        );
 
-    function getTier(uint _tokenId) public view returns (uint) {
-        uint tierIndex = tokenTier[_tokenId];
-        PiggyBankTier storage tier = tiers[tierIndex];
-        return tier.lockingPeriod;
+        deposits[msg.sender] = Deposit(_amount, _tierId, block.timestamp);
     }
 
     function cashOut(uint _tokenId) external {
-        require(balances[msg.sender][_tokenId] > 0, "No balance in piggy bank");
-        require(isLocked(_tokenId) != true, "NFT is locked");
+        Deposit storage depo = deposits[msg.sender];
+        require(depo.amount > 0, "No deposit found");
 
-        uint amount = balances[msg.sender][_tokenId];
-        balances[msg.sender][_tokenId] = 0;
+        uint tierId = tokenIdTotierId[_tokenId];
 
-        _burn(msg.sender, _tokenId, 1);
-        payable(msg.sender).transfer(amount);
-    }
+        PiggyBankTier storage tier = tiers[tierId];
+        uint elapsed = block.timestamp - depo.timestamp;
+        require(elapsed >= tier.lockingPeriod, "Tokens are still locked");
 
-    function isLocked(uint _tokenId) public view returns (uint) {
-        require(balanceOf(msg.sender, _tokenId) > 0, "Invalid token id");
-        uint tierIndex = tokenTier[_tokenId];
-        PiggyBankTier storage tier = tiers[tierIndex];
-        return tier.lockingPeriod;
-    }
+        uint bonusAmount = (depo.amount * tier.bonusPercentage) / 1000;
+        uint withdrawAmount = depo.amount + bonusAmount;
 
-    function deposit(uint _tokenId, uint _amount) external {
-        require(isActive[msg.sender][_tokenId], "Inactive piggy bank");
-        require(_amount > 0, "amount must be greater than 0");
+        // IERC20 token = IERC20(); //piggyytoken address
+        require(token.transfer(msg.sender, withdrawAmount), "Transfer failed");
 
-        balances[msg.sender][_tokenId] += _amount;
+        depo.amount = 0;
+        _burn(msg.sender, _tokenId, depo.amount);
     }
 }
 
@@ -93,14 +97,19 @@ contract JackpotNFT is ERC1155 {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    mapping(address => mapping(uint => bool)) public isActive;
-    mapping(address => mapping(uint => uint)) public balances;
+    struct Deposit {
+        uint amount;
+        uint timestamp;
+    }
+
+    PiggyToken public token;
+    mapping(address => Deposit) public deposits;
 
     event JackpotNFTCreated(address owner, uint tokenId);
 
     constructor() ERC1155("") {}
 
-    function createJackpotNFT(uint _quantity, bytes memory _data) external {
+    function mintJackpotkNFT(uint _quantity, bytes memory _data) external {
         _tokenIds.increment();
         uint newTokenId = _tokenIds.current();
         uint quantity = _quantity;
@@ -108,14 +117,17 @@ contract JackpotNFT is ERC1155 {
         _mint(msg.sender, newTokenId, quantity, data);
         isActive[msg.sender][newTokenId] = true;
 
-        emit JackpotNFTCreated(msg.sender, newTokenId);
+        // emit JacpotNFTCreated(newTokenId);
     }
 
-    function deposit(uint _tokenId, uint _amount) external {
-        require(isActive[msg.sender][_tokenId], "Inactive piggy bank");
-        require(_amount > 0, "amount must be greater than 0");
+    function deposit(uint _amount) external {
+        require(_amount > 0, "Amount must be greater than 0");
+        require(
+            token.transferFrom(uplineaddress[], address(this), _amount),
+            "Transfer failed"
+        );
 
-        balances[msg.sender][_tokenId] += _amount;
+        deposits[msg.sender] = Deposit(_amount, block.timestamp);
     }
 }
 
@@ -123,14 +135,19 @@ contract SpecialNFT is ERC1155 {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    mapping(address => mapping(uint => bool)) public isActive;
-    mapping(address => mapping(uint => uint)) public balances;
+    struct Deposit {
+        uint amount;
+        uint timestamp;
+    }
+
+    PiggyToken public token;
+    mapping(address => Deposit) public deposits;
 
     event SpecialNFTCreated(address owner, uint tokenId);
 
     constructor() ERC1155("") {}
 
-    function createSpecialNFT(uint _quantity, bytes memory _data) external {
+    function mintSpecialNFT(uint _quantity, bytes memory _data) external {
         _tokenIds.increment();
         uint newTokenId = _tokenIds.current();
         uint quantity = _quantity;
@@ -138,13 +155,16 @@ contract SpecialNFT is ERC1155 {
         _mint(msg.sender, newTokenId, quantity, data);
         isActive[msg.sender][newTokenId] = true;
 
-        emit SpecialNFTCreated(msg.sender, newTokenId);
+        // emit SpecialNFTCreated(newTokenId);
     }
 
-    function deposit(uint _tokenId, uint _amount) external {
-        require(isActive[msg.sender][_tokenId], "Inactive piggy bank");
-        require(_amount > 0, "amount must be greater than 0");
+    function deposit(uint _amount) external {
+        require(_amount > 0, "Amount must be greater than 0");
+        require(
+            token.transferFrom(owner, address(this), _amount),
+            "Transfer failed"
+        );
 
-        balances[msg.sender][_tokenId] += _amount;
+        deposits[msg.sender] = Deposit(_amount, block.timestamp);
     }
 }

@@ -2,19 +2,13 @@
 pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-
-interface IERC20 {
-    function transferFrom(address from, address to, uint amount) external;
-
-    function transfer(address to, uint amount) external;
-
-    function burn(address from, uint amount) external;
-
-    function balanceOf(address account) external view returns (uint256);
-}
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./PiggBankNFT.sol";
 
 contract Auction is Ownable {
     IERC20 public token;
+    IERC1155 public nft;
     uint public numberOfTokens;
     address public seller;
     address immutable burnAddress = address(0);
@@ -47,32 +41,36 @@ contract Auction is Ownable {
 
     event Deposit(address indexed user, uint amount);
     event BidAllocation(address indexed user, uint amount);
-    event AuctionStarted();
+    event AuctionStarted(uint endTime);
     event Bid(address indexed bidder, uint amount);
     event WeeklyAuctionStarted();
 
     constructor(address PiggyToken) {
         token = IERC20(PiggyToken);
-        owner = msg.sender;
     }
 
     function startAuction(
         uint _numberOfTokens,
         uint _startingBid,
         uint _bidIncrement,
-        uint _endAt
-    ) external onlyOwner {
-        require(msg.sender == owner, "you are not owner");
+        uint _endTime
+    )
+        external
+        //uint _endAt
+        onlyOwner
+    {
+        //require(msg.sender == owner, "you are not owner");
         require(!started, "already started");
         bidIncrement = _bidIncrement;
+        endAt = _endTime;
         numberOfTokens = _numberOfTokens;
         started = true;
         currentBid = _startingBid;
 
-        emit AuctionStarted();
+        emit AuctionStarted(endAt);
     }
 
-    function bid(uint bidAmount) external returns (bool) {
+    function bid(uint bidAmount, uint _tokenId) external returns (bool) {
         require(started, "auction not started");
         require(block.timestamp < endAt, "auction ended");
         require(bidAmount > 0, "value < highest bid");
@@ -86,15 +84,23 @@ contract Auction is Ownable {
         );
         token.transferFrom(msg.sender, address(this), bidAmount);
         receivedBidAmount += bidAmount;
+        token.transfer(
+            burnAddress,
+            (burnPercentage * receivedBidAmount) / 10000
+        );
+        token.transfer(
+            treasuryAddress,
+            (treasuryPercentage * receivedBidAmount) / 10000
+        );
+        PiggyBankNFT.newTokenId = _tokenId;
         bids[msg.sender] = bids[msg.sender] + bidAmount;
         emit Bid(msg.sender, bidAmount);
     }
 
     function endAuction(
-        uint id,
-        address[] calldata winnerAddress,
-        uint[] winningPercentage,
-        bool[] isActive
+        address[] memory winnerAddress,
+        uint[] memory winningPercentage,
+        bool[] memory isActive
     ) external onlyOwner {
         require(started, "auction not started");
         require(!ended, "auction ended");
@@ -102,6 +108,11 @@ contract Auction is Ownable {
 
         ended = true;
 
+        require(
+            winnerAddress.length == winningPercentage.length,
+            "Invalid array"
+        );
+        require(winnerAddress.length == isActive.length, "Invalid array");
         token.transfer(
             burnAddress,
             (burnPercentage * receivedBidAmount) / 10000
@@ -112,28 +123,20 @@ contract Auction is Ownable {
         );
 
         for (uint i = 0; i < winnerAddress.length; i++) {
-                token.transfer(
-                    winnerAddress[i],
-                    ((winnerPercentage * receivedBidAmount) / 10000) -
-                        ((piggyBankPercentage * receivedBidAmount) / 10000)
-                );
-                token.transfer(
-                    PiggyBankNFTAddress,
-                    ((piggyBankPercentage)) * receivedBidAmount
-                );
+            uint winningAmount = ((winningPercentage[i] * receivedBidAmount)) /
+                10000;
+            uint piggyAmount = winningAmount - (piggyBankPercentage / 10000);
+            if (isActive[i]) {
+                token.transfer(piggyBankNFTAddress, piggyAmount);
+                PiggyBankNFT.deposit(_tokenId, piggyAmount);
+
+                token.transfer(winnerAddress[i], winningAmount);
             } else {
-                token.transfer(
-                    address(this),
-                    JackPotNFTAddress,
-                    numberOfTokens
-                );
+                token.transfer(jackPotNFTAddress, piggyAmount);
+                JackpotNFT.deposit(_tokenId, piggyAmount);
             }
         }
-        //emit AuctionEnded(winnerAddress, winnerPercentage, piggyBankPercentage);
-    }
-
-    function setEndTime(uint _endAt) external {
-        endAt = _endAt;
+        //emit AuctionEnded(winneAddress, winnerPercentage, piggyBankPercentage);
     }
 
     function setTreasuryWallet(address _treasuryAddress) external {
@@ -167,7 +170,7 @@ contract Auction is Ownable {
         uint _bidIncrement,
         uint _endAt
     ) external onlyOwner {
-        require(msg.sender == owner, "you are not owner");
+        //require(msg.sender == owner, "you are not owner");
         require(!started, "already started");
 
         endAt = block.timestamp + 7 days;
@@ -179,9 +182,9 @@ contract Auction is Ownable {
         treasuryPercentage = (20 * numberOfTokens) / 100;
         uint holdingPercentage = (40 * numberOfTokens) / 100;
 
-        token.transfer(owner, burnAddress, burnPercentage);
-        token.transfer(owner, treasuryAddress, treasuryPercentage);
-        token.transfer(owner, holdingAddress, holdingPercentage);
+        token.transfer(burnAddress, burnPercentage);
+        token.transfer(treasuryAddress, treasuryPercentage);
+        token.transfer(holdingAddress, holdingPercentage);
 
         emit WeeklyAuctionStarted();
     }
@@ -189,19 +192,19 @@ contract Auction is Ownable {
     //Deposit functions
 
     function depositPiggyTokens(uint amount) public {
-        IERC20(token).transfer(msg.sender, address(this), amount);
+        IERC20(token).transferFrom(msg.sender, address(this), amount);
         deposits[msg.sender] += amount;
         //Split inTo 3
         uint amountPerAddress = (amount) / 3;
-        IERC20(token).transfer(address(this), ADDR_1, amountPerAddress);
-        IERC20(token).transfer(address(this), ADDR_2, amountPerAddress);
-        IERC20(token).transfer(address(this), DB_ADDR, amountPerAddress);
+        IERC20(token).transfer(ADDR_1, amountPerAddress);
+        IERC20(token).transfer(ADDR_2, amountPerAddress);
+        IERC20(token).transfer(DB_ADDR, amountPerAddress);
 
         emit Deposit(address(this), amount);
         emit Deposit(msg.sender, amount);
     }
 
     function depositBUSD(uint amount) public {
-        IERC20(BUSD_TOKEN).transfer(msg.sender, address(this), amount);
+        IERC20(BUSD_TOKEN).transferFrom(msg.sender, address(this), amount);
     }
 }
