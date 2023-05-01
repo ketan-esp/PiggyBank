@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./PiggyToken.sol";
 
-contract PiggyBankNFT is ERC1155, Ownable, ERC1155Burnable {
+contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
@@ -30,7 +30,7 @@ contract PiggyBankNFT is ERC1155, Ownable, ERC1155Burnable {
     mapping(uint => uint) public tokenIdTotierId;
     mapping(address => mapping(uint => bool)) public isActive;
 
-    constructor(address _token) ERC1155("") {
+    constructor(address _token) ERC721("") {
         token = PiggyToken(_token);
     }
 
@@ -44,17 +44,11 @@ contract PiggyBankNFT is ERC1155, Ownable, ERC1155Burnable {
         tiers[_tierId] = PiggyBankTier(_lockingPeriod, _bonusPercentage);
     }
 
-    function mintPiggyBankNFT(
-        uint _tierId,
-        uint _quantity,
-        bytes memory _data
-    ) external {
+    function mintPiggyBankNFT(uint _tierId) external {
         require(tiers[_tierId].lockingPeriod > 0, "Invalid tier");
         _tokenIds.increment();
         uint newTokenId = _tokenIds.current();
-        uint quantity = _quantity;
-        bytes memory data = _data;
-        _mint(msg.sender, newTokenId, quantity, data);
+        _safeMint(msg.sender, newTokenId);
         tokenIdTotierId[newTokenId] = _tierId;
         isActive[msg.sender][newTokenId] = true;
 
@@ -93,7 +87,7 @@ contract PiggyBankNFT is ERC1155, Ownable, ERC1155Burnable {
     }
 }
 
-contract JackpotNFT is ERC1155 {
+contract JackpotNFT is ERC721 {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
@@ -107,14 +101,12 @@ contract JackpotNFT is ERC1155 {
 
     event JackpotNFTCreated(address owner, uint tokenId);
 
-    constructor() ERC1155("") {}
+    constructor() ERC721("") {}
 
-    function mintJackpotkNFT(uint _quantity, bytes memory _data) external {
+    function mintJackpotkNFT() external {
         _tokenIds.increment();
         uint newTokenId = _tokenIds.current();
-        uint quantity = _quantity;
-        bytes memory data = _data;
-        _mint(msg.sender, newTokenId, quantity, data);
+        _safeMint(msg.sender, newTokenId);
         isActive[msg.sender][newTokenId] = true;
 
         // emit JacpotNFTCreated(newTokenId);
@@ -131,7 +123,7 @@ contract JackpotNFT is ERC1155 {
     }
 }
 
-contract SpecialNFT is ERC1155 {
+contract SpecialNFT is ERC721 {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
@@ -145,14 +137,12 @@ contract SpecialNFT is ERC1155 {
 
     event SpecialNFTCreated(address owner, uint tokenId);
 
-    constructor() ERC1155("") {}
+    constructor() ERC721("") {}
 
-    function mintSpecialNFT(uint _quantity, bytes memory _data) external {
+    function mintSpecialNFT() external {
         _tokenIds.increment();
         uint newTokenId = _tokenIds.current();
-        uint quantity = _quantity;
-        bytes memory data = _data;
-        _mint(msg.sender, newTokenId, quantity, data);
+        _safeMint(msg.sender, newTokenId);
         isActive[msg.sender][newTokenId] = true;
 
         // emit SpecialNFTCreated(newTokenId);
