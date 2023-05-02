@@ -1,35 +1,158 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity 0.8.19;
 
-contract Payments {
-    address payable[] public winners;
-    uint[] public sharePercentage;
-    event TransferReceived(address _from, uint _amount);
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./PiggBankNFT.sol";
 
-    constructor() {}
+interface IJackpotNFT is IERC721 {
+    function mintJackpotkNFT() external;
 
-    function addWinners(address payable[] memory _addrs) external {
-        for (uint i = 0; i < _addrs.length; i++) {
-            winners.push(_addrs[i]);
-        }
+    function lock(
+        address _user,
+        uint _amount,
+        uint _nftId,
+        uint _lockingPeriod,
+        uint _bonusPercentage
+    ) external;
+
+    function cashOut(uint _tokenId) external;
+
+    function token() external view returns (IERC20);
+
+    function locks(
+        uint
+    ) external view returns (address, uint, uint, uint, uint, bool);
+
+    function ownerOf(uint256 tokenId) external view returns (address);
+}
+
+interface ISpecialNFT is IERC721 {
+    function mintSpecialNFT() external;
+
+    function lock(
+        address user,
+        uint amount,
+        uint nftId,
+        uint lockingPeriod,
+        uint bonusPercentage
+    ) external;
+
+    function cashOut(uint tokenId) external;
+
+    function token() external view returns (IERC20);
+
+    function locks(
+        uint nftId
+    )
+        external
+        view
+        returns (
+            address user,
+            uint lockingPeriod,
+            uint bonusPercentage,
+            uint amount,
+            uint startTime,
+            bool isCompleted
+        );
+}
+
+contract Payments is Ownable {
+    using Counters for Counters.Counter;
+    Counters.Counter private auctiontId;
+
+    address[] public winnerAddress;
+
+    bool public started;
+    bool public ended;
+    uint public numberOfTokensPerAuction;
+    uint public endAt;
+    uint public receivedBidAmount;
+    uint public nftID;
+    uint public lockingPeriod;
+    uint public bonusPercentage;
+
+    IERC20 public token;
+    PiggyBankNFT public nft;
+    IJackpotNFT public jackpotNFT;
+    ISpecialNFT public specialNFT;
+
+    event BidReceived(address bidder, uint amount);
+    event TransferCompleted(address _from, uint _amount);
+
+    constructor(IERC20 _token) public {
+        token = _token;
     }
 
-    function addSharePercentage(uint[] memory _sharePercentage) external {
-        uint totalPercentage = 0;
-        for (uint i = 0; i < _sharePercentage.length; i++) {
-            totalPercentage += _sharePercentage[i];
-            sharePercentage.push(_sharePercentage[i]);
-        }
-        require(totalPercentage == 100, "Percentage must add upto 100");
+    function bid(uint bidAmount) external {
+        require(bidAmount > 0, "Bid amount must be greter than 0");
+        require(
+            bidAmount <= token.balanceOf(msg.sender),
+            "Insufficient funds for bid"
+        );
+        require(
+            bidAmount <= token.allowance(msg.sender, address(this)),
+            "Insufficient allowance for transfer"
+        );
+        token.transferFrom(msg.sender, address(this), bidAmount);
+        receivedBidAmount += bidAmount;
+
+        emit BidReceived(msg.sender, bidAmount);
     }
 
-    receive() external payable {
-        require(winners.length == sharePercentage.length, "Invalid array");
-        uint totalAmount = msg.value;
-        for (uint i = 0; i < winners.length; i++) {
-            uint amountToSend = (totalAmount * sharePercentage[i]) / 100;
-            winners[i].transfer(amountToSend);
+    function transferPayments(
+        address[] memory _winnerAddress,
+        uint[] memory _winnerAmount,
+        bool[] memory _isActive,
+        address _piggyBankNFT,
+        uint[] memory _piggyBankNFTId,
+        address _jackpotNFT,
+        uint _lockPercentage
+    ) external payable onlyOwner {
+        require(_winnerAddress.length == _winnerAmount.length, "Invalid array");
+        require(_winnerAddress.length == _isActive.length, "Invalid array");
+        for (uint i = 0; i < _winnerAddress.length; i++) {
+            if (_isActive[i]) {
+                uint lockAmount = (_winnerAmount[i] * _lockPercentage) / 10000;
+
+                token.transfer(
+                    _winnerAddress[i],
+                    _winnerAmount[i] - lockAmount
+                );
+                token.transfer(_piggyBankNFT, lockAmount);
+                nft.lock(_winnerAddress[i], lockAmount, _piggyBankNFTId[i]);
+            } else {
+                token.transfer(_jackpotNFT, _winnerAmount[i]);
+                jackpotNFT.lock(
+                    _winnerAddress[i],
+                    _winnerAmount[i],
+                    nftID,
+                    lockingPeriod,
+                    bonusPercentage
+                );
+            }
         }
-        emit TransferReceived(msg.sender, msg.value);
+
+        emit TransferCompleted(msg.sender, msg.value);
+    }
+
+    function transferToSpecialNFT(
+        address _specilaNFT,
+        uint _tokenId,
+        uint _amount,
+        uint _lockingPercentage,
+        address winner
+    ) external payable onlyOwner {
+        uint lockAmount = (_amount * _lockingPercentage) / 10000;
+        token.transfer(_specilaNFT, lockAmount);
+        specialNFT.transferFrom(msg.sender, winner, _tokenId);
+        specialNFT.lock(
+            msg.sender,
+            lockAmount,
+            nftID,
+            lockingPeriod,
+            bonusPercentage
+        );
     }
 }

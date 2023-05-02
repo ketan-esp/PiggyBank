@@ -8,66 +8,51 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./PiggyToken.sol";
 
-contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable {
+contract JackpotNFT is ERC721 {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    struct PiggyBankTier {
-        uint lockingPeriod;
-        uint bonusPercentage;
-    }
-
     struct Lock {
         address user;
-        uint amount;
         uint lockingPeriod;
         uint bonusPercentage;
+        uint amount;
         uint startTime;
         bool isCompleted;
     }
 
     IERC20 public token;
-
-    mapping(uint => PiggyBankTier) public tiers;
     mapping(uint => Lock) public locks;
-    mapping(uint => uint) public tokenIdTotierId;
-    mapping(address => mapping(uint => bool)) public isActive;
 
-    constructor(IERC20 _token) ERC721("PiggyBankNFT", "PB") {
+    event JackpotNFTCreated(address owner, uint tokenId);
+
+    constructor(IERC20 _token) ERC721("JackpotNFT", "Jp") {
         token = _token;
     }
 
-    function setTiers(
-        uint _tierId,
-        uint _lockingPeriod,
-        uint _bonusPercentage
-    ) external onlyOwner {
-        require(_lockingPeriod > 0, "Locking period must be greater than 0");
-        require(tiers[_tierId].lockingPeriod == 0, "Tier id already exists");
-        tiers[_tierId] = PiggyBankTier(_lockingPeriod, _bonusPercentage);
-    }
-
-    function mintPiggyBankNFT(uint _tierId) external {
-        require(tiers[_tierId].lockingPeriod > 0, "Invalid tier");
+    function mintJackpotkNFT() external {
         _tokenIds.increment();
         uint newTokenId = _tokenIds.current();
         _safeMint(msg.sender, newTokenId);
-        tokenIdTotierId[newTokenId] = _tierId;
-        isActive[msg.sender][newTokenId] = true;
 
-        // emit PiggyBankNFTCreated(msg.sender, newTokenId, _tierId);
+        // emit JacpotNFTCreated(newTokenId);
     }
 
-    function lock(address _user, uint _amount, uint _nftId) external {
+    function lock(
+        address _user,
+        uint _amount,
+        uint _nftId,
+        uint _lockingPeriod,
+        uint _bonusPercentage
+    ) external {
         require(_amount > 0, "Amount must be greater than 0");
-        uint _tierId = tokenIdTotierId[_nftId];
-        require(tiers[_tierId].lockingPeriod > 0, "Invalid tier");
+        require(_lockingPeriod > 0, "Locking period cannot be 0");
 
         locks[_nftId] = Lock(
             _user,
             _amount,
-            tiers[_tierId].lockingPeriod,
-            tiers[_tierId].bonusPercentage,
+            _lockingPeriod,
+            _bonusPercentage,
             block.timestamp,
             false
         );
@@ -87,7 +72,7 @@ contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable {
         uint withdrawAmount = depo.amount + bonusAmount;
         require(
             token.balanceOf(address(this)) >= withdrawAmount,
-            "Insufficient funds in NFT locking pool"
+            "Insufficient funds"
         );
 
         token.transfer(msg.sender, withdrawAmount);
