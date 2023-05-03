@@ -4,7 +4,9 @@ pragma solidity 0.8.19;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./PiggBankNFT.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "./PiggyBankNFT.sol";
+import "./PiggyToken.sol";
 
 interface IJackpotNFT is IERC721 {
     function mintJackpotkNFT() external;
@@ -73,7 +75,7 @@ contract Payments is Ownable {
     uint public lockingPeriod;
     uint public bonusPercentage;
 
-    IERC20 public token;
+    PiggyToken public token;
     PiggyBankNFT public nft;
     IJackpotNFT public jackpotNFT;
     ISpecialNFT public specialNFT;
@@ -81,8 +83,8 @@ contract Payments is Ownable {
     event BidReceived(address bidder, uint amount);
     event TransferCompleted(address _from, uint _amount);
 
-    constructor(IERC20 _token) public {
-        token = _token;
+    constructor(address _token) public {
+        token = PiggyToken(_token);
     }
 
     function bid(uint bidAmount) external {
@@ -101,17 +103,34 @@ contract Payments is Ownable {
         emit BidReceived(msg.sender, bidAmount);
     }
 
+    function sum(uint[] memory arr) private view returns (uint) {
+        uint result = 0;
+        for (uint i = 0; i < arr.length; i++) {
+            result += arr[i];
+        }
+        return result;
+    }
+
     function transferPayments(
         address[] memory _winnerAddress,
         uint[] memory _winnerAmount,
+        uint _burnAmount,
+        uint _treasuryAmount,
+        address _treasuryAddress,
         bool[] memory _isActive,
         address _piggyBankNFT,
         uint[] memory _piggyBankNFTId,
         address _jackpotNFT,
         uint _lockPercentage
     ) external payable onlyOwner {
+        require(
+            _burnAmount + _treasuryAmount + sum(_winnerAmount) == 100,
+            "Total cannot be more than 100"
+        );
         require(_winnerAddress.length == _winnerAmount.length, "Invalid array");
         require(_winnerAddress.length == _isActive.length, "Invalid array");
+        token.burn(_burnAmount);
+        token.transfer(_treasuryAddress, _treasuryAmount);
         for (uint i = 0; i < _winnerAddress.length; i++) {
             if (_isActive[i]) {
                 uint lockAmount = (_winnerAmount[i] * _lockPercentage) / 10000;

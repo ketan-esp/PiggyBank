@@ -21,13 +21,13 @@ contract JackpotNFT is ERC721 {
         bool isCompleted;
     }
 
-    IERC20 public token;
+    PiggyToken public token;
     mapping(uint => Lock) public locks;
 
     event JackpotNFTCreated(address owner, uint tokenId);
 
-    constructor(IERC20 _token) ERC721("JackpotNFT", "Jp") {
-        token = _token;
+    constructor(address _token) ERC721("JackpotNFT", "Jp") {
+        token = PiggyToken(_token);
     }
 
     function mintJackpotkNFT() external {

@@ -21,13 +21,13 @@ contract SpecialNFT is ERC721, Ownable {
         bool isCompleted;
     }
 
-    IERC20 public token;
+    PiggyToken public token;
     mapping(uint => Lock) public locks;
 
     event SpecialNFTCreated(address owner, uint tokenId);
 
-    constructor(IERC20 _token) ERC721("SpecialNFT", "SNFT") {
-        token = _token;
+    constructor(address _token) ERC721("SpecialNFT", "SNFT") {
+        token = PiggyToken(_token);
     }
 
     function mintSpecialNFT() external {

@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./PiggyToken.sol";
 
@@ -26,15 +27,15 @@ contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable {
         bool isCompleted;
     }
 
-    IERC20 public token;
+    PiggyToken public token;
 
     mapping(uint => PiggyBankTier) public tiers;
     mapping(uint => Lock) public locks;
     mapping(uint => uint) public tokenIdTotierId;
     mapping(address => mapping(uint => bool)) public isActive;
 
-    constructor(IERC20 _token) ERC721("PiggyBankNFT", "PB") {
-        token = _token;
+    constructor(address _token) ERC721("PiggyBankNFT", "PB") {
+        token = PiggyToken(_token);
     }
 
     function setTiers(
