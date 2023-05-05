@@ -9,9 +9,18 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./PiggyToken.sol";
 
+/**
+@title SpecialNFT
+@dev Implements a special ERC721 Non-Fungible Token with the ability to lock funds
+*/
+
 contract SpecialNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
+
+    /**
+@dev Represents a single lock on an NFT
+*/
 
     struct Lock {
         address user;
@@ -27,9 +36,20 @@ contract SpecialNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
 
     event SpecialNFTCreated(address owner, uint tokenId);
 
+    /**
+@dev Initializes the contract with a PiggyToken instance
+@param _token The address of PiggyToken contract
+*/
+
     constructor(address _token) ERC721("SpecialNFT", "SNFT") {
         token = PiggyToken(_token);
     }
+
+    /**
+@dev Mints a new special NFT
+@param _paymentContract The address of the payment contract to receive the NFT
+@param uri The URI of the token metadata
+*/
 
     function mintSpecialNFT(
         address _paymentContract,
@@ -43,6 +63,14 @@ contract SpecialNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
         emit SpecialNFTCreated(_paymentContract, newTokenId);
     }
 
+    /**
+@dev Locks funds for a specific NFT
+@param _user The address of the user who is locking the funds
+@param _amount The amount of funds to be locked
+@param _nftId The ID of the NFT
+@param _lockingPeriod The duration for which funds will be locked
+@param _bonusPercentage The percentage of bonus to be given after the locking period
+*/
     function lock(
         address _user,
         uint _amount,
@@ -63,6 +91,10 @@ contract SpecialNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
         );
     }
 
+    /**
+@dev Withdraws locked funds for a specific NFT
+@param _tokenId The ID of the NFT
+*/
     function cashOut(uint _tokenId) external {
         require(ownerOf(_tokenId) == msg.sender, "You are not the owner");
 

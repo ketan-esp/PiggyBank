@@ -9,10 +9,18 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./PiggyToken.sol";
 
+/**
+@title JackpotNFT
+@dev A contract that creates and manages JackpotNFTs
+*/
+
 contract JackpotNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
+    /**
+@dev Represents a single lock on an NFT
+*/
     struct Lock {
         address user;
         uint lockingPeriod;
@@ -27,9 +35,20 @@ contract JackpotNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
 
     event JackpotNFTCreated(address owner, uint tokenId);
 
+    /**
+@dev Initializes the JackpotNFT contract
+@param _token The address of the PiggyToken contract
+*/
+
     constructor(address _token) ERC721("JackpotNFT", "Jp") {
         token = PiggyToken(_token);
     }
+
+    /**
+@dev Creates a new JackpotNFT
+@param _paymentContract The address to which the new NFT will be minted
+@param uri The URI to which the new NFT will be associated
+*/
 
     function mintJackpotkNFT(
         address _paymentContract,
@@ -42,6 +61,15 @@ contract JackpotNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
 
         emit JackpotNFTCreated(_paymentContract, newTokenId);
     }
+
+    /**
+@dev Locks the given amount of PiggyTokens with the given NFT for a specified period
+@param _user The address of the user who is locking the tokens
+@param _amount The amount of tokens to be locked
+@param _nftId The ID of the NFT being used to lock the tokens
+@param _lockingPeriod The period for which the tokens will be locked
+@param _bonusPercentage The bonus percentage to be given to the user after the locking period is over
+*/
 
     function lock(
         address _user,
@@ -62,6 +90,11 @@ contract JackpotNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
             false
         );
     }
+
+    /**
+@dev Withdraws the locked PiggyTokens associated with the given NFT and burns the NFT
+@param _tokenId The ID of the NFT to be used for withdrawal
+*/
 
     function cashOut(uint _tokenId) external {
         require(ownerOf(_tokenId) == msg.sender, "You are not the owner");

@@ -9,6 +9,14 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./PiggyToken.sol";
 
+/**
+@title PiggyBankNFT
+@dev This contract is an ERC721 compliant contract that represents a PiggyBank. 
+It allows users to lock their tokens for a specific period of time and receive a bonus as a reward. 
+The contract also allows users to mint PiggyBankNFT tokens of different tiers, 
+each with a specific locking period and bonus percentage.
+*/
+
 contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
@@ -43,9 +51,21 @@ contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
     );
     event NFTCashedOut(uint tokenId, address user, uint amount);
 
+    /**
+ * @dev Constructor that sets the PiggyToken contract address and 
+ initializes the ERC721 contract with the name "PiggyBankNFT" and symbol "PB".
+ * @param _token The address of the PiggyToken contract.
+ */
     constructor(address _token) ERC721("PiggyBankNFT", "PB") {
         token = PiggyToken(_token);
     }
+
+    /**
+     * @dev Sets the PiggyBank tiers.
+     * @param _tierId The ID of the tier.
+     * @param _lockingPeriod The period of time for which the tokens are locked.
+     * @param _bonusPercentage The bonus percentage that users receive.
+     */
 
     function setTiers(
         uint _tierId,
@@ -56,6 +76,12 @@ contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
         require(tiers[_tierId].lockingPeriod == 0, "Tier id already exists");
         tiers[_tierId] = PiggyBankTier(_lockingPeriod, _bonusPercentage);
     }
+
+    /**
+     * @dev Mints a PiggyBankNFT token.
+     * @param _tierId The ID of the PiggyBank tier.
+     * @param uri The URI of the PiggyBankNFT token.
+     */
 
     function mintPiggyBankNFT(uint _tierId, string memory uri) external {
         require(tiers[_tierId].lockingPeriod > 0, "Invalid tier");
@@ -69,6 +95,12 @@ contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
         emit PiggyBankNFTCreated(msg.sender, newTokenId, _tierId);
     }
 
+    /**
+@dev Locks funds for a specific NFT
+@param _user The address of the user who is locking the funds
+@param _amount The amount of funds to be locked
+@param _nftId The ID of the NFT
+*/
     function lock(address _user, uint _amount, uint _nftId) external {
         require(_amount > 0, "Amount must be greater than 0");
         uint _tierId = tokenIdTotierId[_nftId];
@@ -89,6 +121,11 @@ contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
             tiers[_tierId].bonusPercentage
         );
     }
+
+    /**
+@dev Withdraws locked funds for a specific NFT
+@param _tokenId The ID of the NFT
+*/
 
     function cashOut(uint _tokenId) external {
         require(ownerOf(_tokenId) == msg.sender, "You are not the owner");
