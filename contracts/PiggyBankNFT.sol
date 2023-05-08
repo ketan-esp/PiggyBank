@@ -152,6 +152,20 @@ contract PiggyBankNFT is ERC721, Ownable, ERC721Burnable, ERC721URIStorage {
         emit NFTCashedOut(_tokenId, msg.sender, withdrawAmount);
     }
 
+    function getBalanceByTokenId(uint _tokenId) public view returns (uint) {
+        Lock storage depo = locks[_tokenId];
+        require(depo.amount > 0, "No deposit found");
+        uint elapsed = block.timestamp - depo.startTime;
+        uint bonusAmount = 0;
+        if (elapsed > depo.lockingPeriod) {
+            bonusAmount = (depo.amount * depo.bonusPercentage) / 100;
+            bonusAmount += depo.amount;
+        } else {
+            bonusAmount = depo.amount;
+        }
+        return bonusAmount;
+    }
+
     //override functions
     function _burn(
         uint256 tokenId

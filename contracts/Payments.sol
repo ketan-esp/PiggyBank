@@ -31,7 +31,7 @@ contract Payments is Ownable, ERC721Holder {
     JackpotNFT public jackpotNFT;
     SpecialNFT public specialNFT;
 
-    event BidReceived(address bidder, uint amount);
+    event DepositReceived(address bidder, uint amount);
     event TransferCompleted(address _from, uint _amount);
 
     /**
@@ -56,24 +56,24 @@ contract Payments is Ownable, ERC721Holder {
     }
 
     /**
-@dev Allows users to bid for NFTs using the PiggyToken ERC20 token.
-@param bidAmount The amount of PiggyToken to bid.
+@dev Allows users to deposit for NFTs using the PiggyToken ERC20 token.
+@param amount The amount of PiggyToken to bid.
 */
 
-    function bid(uint bidAmount) external {
-        require(bidAmount > 0, "Bid amount must be greter than 0");
+    function deposit(uint amount) external {
+        require(amount > 0, "Bid amount must be greter than 0");
         require(
-            bidAmount <= token.balanceOf(msg.sender),
+            amount <= token.balanceOf(msg.sender),
             "Insufficient funds for bid"
         );
         require(
-            bidAmount <= token.allowance(msg.sender, address(this)),
+            amount <= token.allowance(msg.sender, address(this)),
             "Insufficient allowance for transfer"
         );
-        token.transferFrom(msg.sender, address(this), bidAmount);
-        receivedBidAmount += bidAmount;
+        token.transferFrom(msg.sender, address(this), amount);
+        receivedBidAmount += amount;
 
-        emit BidReceived(msg.sender, bidAmount);
+        emit DepositReceived(msg.sender, amount);
     }
 
     /**
@@ -96,15 +96,19 @@ contract Payments is Ownable, ERC721Holder {
         address _treasuryAddress,
         address _piggyBankNFT,
         uint[] memory _piggyBankNFTId,
-        uint _lockPercentage
+        uint[] memory _lockPercentage
     ) external onlyOwner {
         require(_winnerAddress.length == _winnerAmount.length, "Invalid array");
+        require(
+            _winnerAddress.length == _lockPercentage.length,
+            "Invalid array"
+        );
 
         token.burn(_burnAmount);
         token.transfer(_treasuryAddress, _treasuryAmount);
 
         for (uint i = 0; i < _winnerAddress.length; i++) {
-            uint lockAmount = (_winnerAmount[i] * _lockPercentage) / 100;
+            uint lockAmount = (_winnerAmount[i] * _lockPercentage[i]) / 100;
             token.transfer(_winnerAddress[i], _winnerAmount[i] - lockAmount);
             token.transfer(_piggyBankNFT, lockAmount);
             piggyNFT.lock(_winnerAddress[i], lockAmount, _piggyBankNFTId[i]);
@@ -116,7 +120,7 @@ contract Payments is Ownable, ERC721Holder {
 @param uplineAddress The addresses of the winners
 @param uplineAmount The amounts to be transferred to each winner
 @param isActive Checks if a particular address is active or not
-@param _nftID The ID of the JackpotNFT to be locked
+@param _jackpotNFTId The ID of the JackpotNFT to be locked
 @param _lockingPeriod The duration for which funds will be locked
 @param _bonusPercentage The percentage of bonus to be given after the locking period
 @param _jackpotNFT address of jackpot nft contract
@@ -125,22 +129,32 @@ contract Payments is Ownable, ERC721Holder {
     function transferUplinePayments(
         address[] memory uplineAddress,
         uint[] memory uplineAmount,
+        uint[] memory _piggyBankNFTId,
+        uint[] memory _lockPercentage,
+        address _piggyBankNFT,
         bool[] memory isActive,
-        uint _nftID,
+        uint _jackpotNFTId,
         uint _lockingPeriod,
         uint _bonusPercentage,
         address _jackpotNFT
-    ) external {
+    ) external onlyOwner {
         require(uplineAddress.length == uplineAmount.length, "Invalid array");
+        require(
+            uplineAddress.length == _lockPercentage.length,
+            "Invalid array"
+        );
         for (uint i = 0; i < uplineAddress.length; i++) {
             if (isActive[i]) {
-                token.transfer(uplineAddress[i], uplineAmount[i]);
+                uint lockAmount = (uplineAmount[i] * _lockPercentage[i]) / 100;
+                token.transfer(uplineAddress[i], uplineAmount[i] - lockAmount);
+                token.transfer(_piggyBankNFT, lockAmount);
+                piggyNFT.lock(uplineAddress[i], lockAmount, _piggyBankNFTId[i]);
             } else {
                 token.transfer(_jackpotNFT, uplineAmount[i]);
                 jackpotNFT.lock(
                     uplineAddress[i],
                     uplineAmount[i],
-                    _nftID,
+                    _jackpotNFTId,
                     _lockingPeriod,
                     _bonusPercentage
                 );
